@@ -82,7 +82,8 @@ class SysTrayIcon(object):
                  menu_options=None,
                  on_quit=None,
                  default_menu_index=None,
-                 window_class_name=None):
+                 window_class_name=None,
+                 error_handler=None):
 
         self._icon = icon
         self._icon_shared = False
@@ -96,6 +97,7 @@ class SysTrayIcon(object):
 
         window_class_name = window_class_name or ("SysTrayIconPy-%s" % (str(uuid.uuid4())))
 
+        self._error_handler = error_handler
         self._default_menu_index = (default_menu_index or 0)
         self._window_class_name = encode_for_locale(window_class_name)
         self._message_dict = {RegisterWindowMessage("TaskbarCreated"): self._restart,
@@ -361,7 +363,13 @@ class SysTrayIcon(object):
         if menu_action == SysTrayIcon.QUIT:
             DestroyWindow(self._hwnd)
         else:
-            menu_action(self)
+            try:
+                menu_action(self)
+            except Exception as exc:
+                if self._error_handler and callable(self._error_handler):
+                    self._error_handler(exc)
+                else:
+                    raise
 
 
 def _non_string_iterable(obj):
