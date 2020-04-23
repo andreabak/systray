@@ -23,6 +23,7 @@ GetCursorPos = ctypes.windll.user32.GetCursorPos
 SetForegroundWindow = ctypes.windll.user32.SetForegroundWindow
 TrackPopupMenu = ctypes.windll.user32.TrackPopupMenu
 CreatePopupMenu = ctypes.windll.user32.CreatePopupMenu
+DestroyMenu = ctypes.windll.user32.DestroyMenu
 CreateCompatibleDC = ctypes.windll.gdi32.CreateCompatibleDC
 GetDC = ctypes.windll.user32.GetDC
 CreateCompatibleBitmap = ctypes.windll.gdi32.CreateCompatibleBitmap

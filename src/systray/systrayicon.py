@@ -25,29 +25,28 @@ class MenuOption:
 
 
 class CheckBoxMenuOption(MenuOption):
-    # TODO: Review interface: allow passing only callable|bool, make checked a read-only property -> _get_checked
-    def __init__(self, *args, check_hook=None, checked=False, **kwargs):
+    def __init__(self, *args, check_hook=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.check_hook = check_hook
-        self.checked = checked
+        self._checked = False
         self._get_checked()
 
     def refresh(self):
         self._get_checked()
         if self.menu_handle is not None:
             menu_item_checked = GetMenuState(self.menu_handle, self.menu_position, MF_BYPOSITION) & MFS_CHECKED
-            if self.checked != menu_item_checked:
-                u_check = MFS_CHECKED if self.checked else MFS_UNCHECKED
+            if self._checked != menu_item_checked:
+                u_check = MFS_CHECKED if self._checked else MFS_UNCHECKED
                 CheckMenuItem(self.menu_handle, self.menu_position, MF_BYPOSITION | u_check)
 
     def _get_checked(self):
         if self.check_hook and callable(self.check_hook):
-            self.checked = bool(self.check_hook())
+            self._checked = bool(self.check_hook())
 
     @property
     def fstate(self):
         self._get_checked()
-        return MFS_CHECKED if self.checked else MFS_UNCHECKED
+        return MFS_CHECKED if self._checked else MFS_UNCHECKED
 
     @fstate.setter
     def fstate(self, value):
@@ -263,10 +262,10 @@ class SysTrayIcon(object):
         nid = NotifyData(self._hwnd, 0)
         Shell_NotifyIcon(NIM_DELETE, ctypes.byref(nid))
         PostQuitMessage(0)  # Terminate the app.
-        # TODO * release self._menu with DestroyMenu and reset the memeber
-        #      * release self._hicon with DestoryIcon and reset the member
-        #      * release loaded menu icons (loaded in _load_menu_icon) with DeleteObject
-        #        (we don't keep those objects anywhere now)
+        if self._menu:
+            DestroyMenu(self._menu)
+        if self._hicon:
+            DestroyIcon(self._hicon)
         self._hwnd = None
         self._notify_id = None
 
