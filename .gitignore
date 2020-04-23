@@ -52,7 +52,7 @@ tmp*
 !tmp*py
 buildout.in
 
-src/infi/systray/__version__.py
+src/systray/__version__.py
 bootstrap.py
 .cache
 eggs
