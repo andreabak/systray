@@ -14,6 +14,8 @@ UpdateWindow = ctypes.windll.user32.UpdateWindow
 DefWindowProc = ctypes.windll.user32.DefWindowProcA
 GetSystemMetrics = ctypes.windll.user32.GetSystemMetrics
 InsertMenuItem = ctypes.windll.user32.InsertMenuItemA
+CheckMenuItem = ctypes.windll.user32.CheckMenuItem
+GetMenuState = ctypes.windll.user32.GetMenuState
 PostMessage = ctypes.windll.user32.PostMessageA
 PostQuitMessage = ctypes.windll.user32.PostQuitMessage
 SetMenuDefaultItem = ctypes.windll.user32.SetMenuDefaultItem
@@ -43,10 +45,31 @@ NIM_DELETE = 2
 NIF_ICON = 2
 NIF_MESSAGE = 1
 NIF_TIP = 4
+MIIM_STATE = 1
 MIIM_ID = 2
 MIIM_SUBMENU = 4
 MIIM_STRING = 64
 MIIM_BITMAP = 128
+MIIM_FTYPE = 256
+MFT_STRING = 0
+MFT_BITMAP = 4
+MFT_MENUBARBREAK = 32
+MFT_MENUBREAK = 64
+MFT_OWNERDRAW = 256
+MFT_RADIOCHECK = 512
+MFT_SEPARATOR = 2048
+MFT_RIGHTORDER = 8192
+MFT_RIGHTJUSTIFY = 16384
+MFS_UNCHECKED = 0
+MFS_UNHILITE = 0
+MFS_ENABLED = 0
+MFS_DISABLED = 3
+MFS_GRAYED = 3
+MFS_CHECKED = 8
+MFS_HILITE = 128
+MFS_DEFAULT = 4096
+MF_BYCOMMAND = 0
+MF_BYPOSITION = 1024
 WM_DESTROY = 2
 WM_CLOSE = 16
 WM_COMMAND = 273
@@ -146,10 +169,16 @@ class NOTIFYICONDATA(ctypes.Structure):
         _fields_.append(("hBalloonIcon", HANDLE))
 
 
-def PackMENUITEMINFO(text=None, hbmpItem=None, wID=None, hSubMenu=None):
+def PackMENUITEMINFO(text=None, hbmpItem=None, wID=None, hSubMenu=None, fType=None, fState=None):
     res = MENUITEMINFO()
     res.cbSize = ctypes.sizeof(res)
     res.fMask = 0
+    if fType is not None:
+        res.fMask |= MIIM_FTYPE
+        res.fType = fType
+    if fState is not None:
+        res.fMask |= MIIM_STATE
+        res.fState = fState
     if hbmpItem is not None:
         res.fMask |= MIIM_BITMAP
         res.hbmpItem = hbmpItem

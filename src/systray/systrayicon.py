@@ -1,14 +1,67 @@
 import os
-from .win32_adapter import *
 import threading
 import uuid
+from copy import copy
+
+from .win32_adapter import *
+
+
+class MenuOption:
+    def __init__(self, text, icon_path=None, callback=None, submenu=None):
+        self.text = text
+        self.icon_path = icon_path
+        self.callback = callback
+        self.submenu = submenu
+
+        self.ftype = None
+        self.fstate = None
+
+        self.action_id = None
+        self.menu_handle = None
+        self.menu_position = None
+
+    def refresh(self):
+        pass
+
+
+class CheckBoxMenuOption(MenuOption):
+    # TODO: Review interface: allow passing only callable|bool, make checked a read-only property -> _get_checked
+    def __init__(self, *args, check_hook=None, checked=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.check_hook = check_hook
+        self.checked = checked
+        self._get_checked()
+
+    def refresh(self):
+        self._get_checked()
+        if self.menu_handle is not None:
+            menu_item_checked = GetMenuState(self.menu_handle, self.menu_position, MF_BYPOSITION) & MFS_CHECKED
+            if self.checked != menu_item_checked:
+                u_check = MFS_CHECKED if self.checked else MFS_UNCHECKED
+                CheckMenuItem(self.menu_handle, self.menu_position, MF_BYPOSITION | u_check)
+
+    def _get_checked(self):
+        if self.check_hook and callable(self.check_hook):
+            self.checked = bool(self.check_hook())
+
+    @property
+    def fstate(self):
+        self._get_checked()
+        return MFS_CHECKED if self.checked else MFS_UNCHECKED
+
+    @fstate.setter
+    def fstate(self, value):
+        return  # Does nothing
+
 
 class SysTrayIcon(object):
     """
-    menu_options: tuple of tuples (menu text, menu icon path or None, function name)
+    menu_options: list or tuple of MenuOption objects or tuples of (text, icon_path, callback)
 
-    menu text and tray hover text should be Unicode
+    text and tray hover text should be Unicode
     hover_text length is limited to 128; longer text will be truncated
+    icon_path can be None
+    callback must be a callable or special action from SysTrayIcon.SPECIAL_ACTIONS
 
     Can be used as context manager to enable automatic termination of tray
     if parent thread is closed:
@@ -37,12 +90,10 @@ class SysTrayIcon(object):
         self._hover_text = hover_text
         self._on_quit = on_quit
 
-        menu_options = menu_options or ()
-        menu_options = menu_options + (('Quit', None, SysTrayIcon.QUIT),)
         self._next_action_id = SysTrayIcon.FIRST_ID
-        self._menu_actions_by_id = set()
-        self._menu_options = self._add_ids_to_menu_options(list(menu_options))
-        self._menu_actions_by_id = dict(self._menu_actions_by_id)
+        self._menu_actions_by_id = dict()
+        self._menu_options = list()
+        self._prepare_menu_options(menu_options)
 
         window_class_name = window_class_name or ("SysTrayIconPy-%s" % (str(uuid.uuid4())))
 
@@ -131,20 +182,36 @@ class SysTrayIcon(object):
             self._hover_text = hover_text
         self._refresh_icon()
 
-    def _add_ids_to_menu_options(self, menu_options):
+    def _prepare_menu_options(self, menu_options):
+        menu_options = menu_options or ()
+        if isinstance(menu_options, tuple):
+            menu_options = list(menu_options)
+        menu_options.append(MenuOption('Quit', callback=SysTrayIcon.QUIT))
+        self._next_action_id = SysTrayIcon.FIRST_ID
+        self._menu_actions_by_id = dict()
+        self._menu_options = self._recompile_menu_options_with_ids(menu_options)
+
+    def _recompile_menu_options_with_ids(self, menu_options):
         result = []
         for menu_option in menu_options:
-            option_text, option_icon, option_action = menu_option
-            if callable(option_action) or option_action in SysTrayIcon.SPECIAL_ACTIONS:
-                self._menu_actions_by_id.add((self._next_action_id, option_action))
-                result.append(menu_option + (self._next_action_id,))
-            elif non_string_iterable(option_action):
-                result.append((option_text,
-                               option_icon,
-                               self._add_ids_to_menu_options(option_action),
-                               self._next_action_id))
+            if isinstance(menu_option, tuple):
+                menu_option = MenuOption(*menu_option)
+            elif isinstance(menu_option, dict):
+                menu_option = MenuOption(**menu_option)
+            elif isinstance(menu_option, MenuOption):
+                menu_option = copy(menu_option)
             else:
-                raise Exception('Unknown item', option_text, option_icon, option_action)
+                raise ValueError('Unknown menu option type', type(menu_option))
+            menu_option.action_id = self._next_action_id
+            submenu = menu_option.submenu or _non_string_iterable(menu_option.callback)
+            if callable(menu_option.callback) or menu_option.callback in SysTrayIcon.SPECIAL_ACTIONS:
+                self._menu_actions_by_id[menu_option.action_id] = menu_option.callback
+            elif submenu:
+                menu_option.submenu = self._recompile_menu_options_with_ids(submenu)
+                menu_option.callback = None
+            else:
+                raise Exception('Unknown item', menu_option.text, menu_option.icon_path, menu_option.callback)
+            result.append(menu_option)
             self._next_action_id += 1
         return result
 
@@ -212,11 +279,21 @@ class SysTrayIcon(object):
             pass
         return True
 
+    def _refresh_menu_options(self, menu_options=None):
+        if menu_options is None:
+            menu_options = self._menu_options
+        for menu_option in menu_options:
+            menu_option.refresh()
+            if menu_option.submenu:
+                self._refresh_menu_options(menu_option.submenu)
+
     def _show_menu(self):
         if self._menu is None:
             self._menu = CreatePopupMenu()
             self._create_menu(self._menu, self._menu_options)
             #SetMenuDefaultItem(self._menu, 1000, 0)
+
+        self._refresh_menu_options()
 
         pos = POINT()
         GetCursorPos(ctypes.byref(pos))
@@ -232,22 +309,24 @@ class SysTrayIcon(object):
         PostMessage(self._hwnd, WM_NULL, 0, 0)
 
     def _create_menu(self, menu, menu_options):
-        for option_text, option_icon, option_action, option_id in menu_options[::-1]:
-            if option_icon:
-                option_icon = self._prep_menu_icon(option_icon)
+        for position, menu_option in enumerate(menu_options):
+            option_icon = self._prep_menu_icon(menu_option.icon_path) if menu_option.icon_path else None
 
-            if option_id in self._menu_actions_by_id:
-                item = PackMENUITEMINFO(text=option_text,
-                                        hbmpItem=option_icon,
-                                        wID=option_id)
-                InsertMenuItem(menu, 0, 1, ctypes.byref(item))
-            else:
+            item_attributes = dict(text=menu_option.text,
+                                   hbmpItem=option_icon,
+                                   fType=menu_option.ftype,
+                                   fState=menu_option.fstate)
+            if menu_option.action_id in self._menu_actions_by_id:
+                item = PackMENUITEMINFO(**item_attributes, wID=menu_option.action_id)
+            elif menu_option.submenu is not None:
                 submenu = CreatePopupMenu()
-                self._create_menu(submenu, option_action)
-                item = PackMENUITEMINFO(text=option_text,
-                                        hbmpItem=option_icon,
-                                        hSubMenu=submenu)
-                InsertMenuItem(menu, 0, 1,  ctypes.byref(item))
+                self._create_menu(submenu, menu_option.submenu)
+                item = PackMENUITEMINFO(**item_attributes, hSubMenu=submenu)
+            else:
+                raise ValueError('Bad configured menu option: no action nor submenu found')
+            menu_option.menu_handle = menu
+            menu_option.menu_position = position
+            InsertMenuItem(menu, position, True, ctypes.byref(item))
 
     @staticmethod
     def _prep_menu_icon(icon):
