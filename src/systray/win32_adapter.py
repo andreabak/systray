@@ -5,6 +5,7 @@ import sys
 
 
 RegisterWindowMessage = ctypes.windll.user32.RegisterWindowMessageA
+RegisterWindowMessageW = ctypes.windll.user32.RegisterWindowMessageW
 LoadCursor = ctypes.windll.user32.LoadCursorA
 LoadIcon = ctypes.windll.user32.LoadIconA
 LoadImage = ctypes.windll.user32.LoadImageA

@@ -101,6 +101,7 @@ class SysTrayIcon(object):
         self._default_menu_index = (default_menu_index or 0)
         self._window_class_name = encode_for_locale(window_class_name)
         self._message_dict = {RegisterWindowMessage("TaskbarCreated"): self._restart,
+                              RegisterWindowMessageW("TaskbarCreated"): self._restart,
                               WM_DESTROY: self._destroy,
                               WM_CLOSE: self._destroy,
                               WM_COMMAND: self._command,
@@ -256,6 +257,7 @@ class SysTrayIcon(object):
         Shell_NotifyIcon(message, ctypes.byref(self._notify_id))
 
     def _restart(self, hwnd, msg, wparam, lparam):
+        self._notify_id = None
         self._refresh_icon()
 
     def _destroy(self, hwnd, msg, wparam, lparam):
