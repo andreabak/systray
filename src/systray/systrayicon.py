@@ -145,17 +145,18 @@ class SysTrayIcon(object):
 
     def _create_window(self):
         style = WS_OVERLAPPED | WS_SYSMENU
-        self._hwnd = CreateWindowEx(0, self._window_class_name,
-                                      self._window_class_name,
-                                      style,
-                                      0,
-                                      0,
-                                      CW_USEDEFAULT,
-                                      CW_USEDEFAULT,
-                                      0,
-                                      0,
-                                      self._hinst,
-                                      None)
+        self._hwnd = CreateWindowEx(0,
+                                    self._window_class_name,
+                                    self._window_class_name,
+                                    style,
+                                    0,
+                                    0,
+                                    CW_USEDEFAULT,
+                                    CW_USEDEFAULT,
+                                    0,
+                                    0,
+                                    self._hinst,
+                                    None)
         UpdateWindow(self._hwnd)
         self._refresh_icon()
 
@@ -249,11 +250,11 @@ class SysTrayIcon(object):
         else:
             message = NIM_ADD
         self._notify_id = NotifyData(self._hwnd,
-                          0,
-                          NIF_ICON | NIF_MESSAGE | NIF_TIP,
-                          WM_USER+20,
-                          self._hicon,
-                          self._hover_text)
+                                     0,
+                                     NIF_ICON | NIF_MESSAGE | NIF_TIP,
+                                     WM_USER+20,
+                                     self._hicon,
+                                     self._hover_text)
         Shell_NotifyIcon(message, ctypes.byref(self._notify_id))
 
     def _restart(self, hwnd, msg, wparam, lparam):
@@ -294,7 +295,7 @@ class SysTrayIcon(object):
         if self._menu is None:
             self._menu = CreatePopupMenu()
             self._create_menu(self._menu, self._menu_options)
-            #SetMenuDefaultItem(self._menu, 1000, 0)
+            # SetMenuDefaultItem(self._menu, 1000, 0)
 
         self._refresh_menu_options()
 
